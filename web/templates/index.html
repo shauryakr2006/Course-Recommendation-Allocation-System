@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Recommendation & Allocation System</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              200: '#bfdbfe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+    .badge-allotted { background-color: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; }
+    .badge-waitlisted { background-color: #FFFBEB; color: #B45309; border: 1px solid #FDE68A; }
+    .badge-rejected { background-color: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+    .badge-unallotted { background-color: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased">
+
+  <!-- TOP HEADER & BRANDING BAR -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-xs">
+    <div class="w-full px-6 lg:px-10">
+      <div class="flex items-center justify-between h-16">
+        
+        <!-- Logo & Title (Clean, unbusy, no unnecessary subtitles or course codes) -->
+        <div class="flex items-center space-x-3.5">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-700 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm flex-shrink-0">
+            <i class="ph-bold ph-graduation-cap text-xl"></i>
+          </div>
+          <div>
+            <h1 class="font-bold text-slate-900 text-lg tracking-tight">Course Recommendation & Allocation System</h1>
+          </div>
+        </div>
+
+        <!-- Controls & Dataset Switcher -->
+        <div class="flex items-center space-x-3">
+          
+          <!-- Dataset Selector -->
+          <div class="hidden sm:flex items-center space-x-2 bg-slate-100/80 p-1 rounded-xl border border-slate-200 text-xs">
+            <span class="text-slate-500 font-semibold px-2">Cohort:</span>
+            <select id="select-dataset" onchange="switchDataset(this.value)" class="bg-white text-slate-800 font-semibold rounded-lg px-2.5 py-1 text-xs border-0 shadow-xs focus:ring-1 focus:ring-brand-500">
+              <option value="10_students">10 Demo Students (Sandbox)</option>
+              <option value="100_students">100 Students (Full Curriculum)</option>
+              <option value="benchmark">Benchmark Lab (8 Students)</option>
+            </select>
+          </div>
+
+          <button onclick="runAllocationCycle()" id="btn-run-cycle" class="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs transition active:scale-95">
+            <i class="ph-bold ph-play"></i>
+            <span>Run Allocation</span>
+          </button>
+
+          <button onclick="testTriggerModal()" class="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-amber-500 text-white hover:bg-amber-600 shadow-xs transition active:scale-95">
+            <i class="ph-bold ph-lightning"></i>
+            <span>Test Trigger</span>
+          </button>
+
+          <button onclick="resetCurrentDatabase()" title="Reset active dataset" class="inline-flex items-center space-x-1 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+            <i class="ph ph-arrow-counter-clockwise"></i>
+            <span class="hidden md:inline">Reset</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- MAIN TABS NAVIGATION (CLEAN, WIDE, MODERN) -->
+      <nav class="flex space-x-1 border-t border-slate-100 py-1.5 overflow-x-auto text-xs font-medium">
+        <button onclick="switchTab('tab-demo')" id="nav-tab-demo" class="nav-tab active px-3.5 py-1.5 rounded-lg text-brand-700 bg-brand-50 font-bold flex items-center space-x-1.5 transition">
+          <i class="ph-bold ph-test-tube"></i><span>Demo Sandbox</span>
+        </button>
+        <button onclick="switchTab('tab-dashboard')" id="nav-tab-dashboard" class="nav-tab px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center space-x-1.5 transition">
+          <i class="ph-bold ph-chart-donut"></i><span>Allocations & Metrics</span>
+        </button>
+        <button onclick="switchTab('tab-courses')" id="nav-tab-courses" class="nav-tab px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center space-x-1.5 transition">
+          <i class="ph-bold ph-books"></i><span>Course Catalog (<span id="nav-courses-count">14</span>)</span>
+        </button>
+        <button onclick="switchTab('tab-students')" id="nav-tab-students" class="nav-tab px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center space-x-1.5 transition">
+          <i class="ph-bold ph-user-focus"></i><span>Student Explorer (<span id="nav-students-count">10</span>)</span>
+        </button>
+        <button onclick="switchTab('tab-engine')" id="nav-tab-engine" class="nav-tab px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center space-x-1.5 transition">
+          <i class="ph-bold ph-cpu"></i><span>Allocation Logic</span>
+        </button>
+        <button onclick="switchTab('tab-lab')" id="nav-tab-lab" class="nav-tab px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center space-x-1.5 transition">
+          <i class="ph-bold ph-flask"></i><span>Cutoff & Triggers</span>
+        </button>
+        <button onclick="switchTab('tab-schema')" id="nav-tab-schema" class="nav-tab px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 flex items-center space-x-1.5 transition">
+          <i class="ph-bold ph-tree-structure"></i><span>Schema & Architecture</span>
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- NOTIFICATION TOAST -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none flex items-center space-x-2 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium"></div>
+
+  <!-- MAIN BODY CONTAINER (FULL-WIDTH FLUID LAYOUT) -->
+  <main class="flex-1 w-full px-6 lg:px-10 py-6">
+
+    <!-- ===================================================================== -->
+    <!-- TAB 1: LIVE DEMO SANDBOX (10 STUDENTS) -->
+    <!-- ===================================================================== -->
+    <section id="tab-demo" class="tab-pane space-y-6">
+      
+      <!-- Top Action Bar (Presentable, Clean, Uncluttered) -->
+      <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-200/60">Interactive Sandbox</span>
+            <span class="text-xs text-slate-400 font-medium">10 Students Cohort</span>
+          </div>
+          <h2 class="text-xl font-bold text-slate-900 mt-1 tracking-tight">Interactive Allocation Sandbox</h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            Adjust candidate CGPAs or enter new students to observe real-time procedural seat allocations.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5">
+          <button onclick="openAddStudentModal()" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition active:scale-95 flex items-center space-x-1.5">
+            <i class="ph-bold ph-user-plus text-sm"></i>
+            <span>+ Enter New Student</span>
+          </button>
+
+          <button onclick="runAllocationCycle()" class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white shadow-xs transition active:scale-95 flex items-center space-x-1.5">
+            <i class="ph-bold ph-arrows-clockwise text-sm"></i>
+            <span>Re-run Cycle</span>
+          </button>
+
+          <button onclick="resetDemoTo10()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center space-x-1.5">
+            <i class="ph ph-arrow-counter-clockwise"></i>
+            <span>Reset Demo</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Viva Scenarios (Compact & High-Impact) -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div class="flex items-center space-x-2 text-xs font-bold text-slate-800">
+            <span class="flex h-2 w-2 rounded-full bg-brand-600"></span>
+            <span>One-Click Demonstrations:</span>
+          </div>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 flex-1 max-w-4xl">
+            <!-- Scenario 1 -->
+            <button onclick="demoBoostKabir()" class="p-2.5 rounded-xl border border-blue-200 bg-blue-50/50 hover:bg-blue-100/60 transition text-left group">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-blue-900 group-hover:text-blue-700">1. Merit Elevation</span>
+                <i class="ph-bold ph-arrow-up-right text-blue-600 text-xs"></i>
+              </div>
+              <p class="text-[11px] text-slate-600 mt-0.5">Boost Kabir to 8.20 &rarr; Allots 24CS570</p>
+            </button>
+
+            <!-- Scenario 2 -->
+            <button onclick="demoDropAnika()" class="p-2.5 rounded-xl border border-rose-200 bg-rose-50/50 hover:bg-rose-100/60 transition text-left group">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-rose-900 group-hover:text-rose-700">2. Cutoff Boundary</span>
+                <i class="ph-bold ph-arrow-down-right text-rose-600 text-xs"></i>
+              </div>
+              <p class="text-[11px] text-slate-600 mt-0.5">Drop Anika to 6.49 &rarr; Rejects 24CS551</p>
+            </button>
+
+            <!-- Scenario 3 -->
+            <button onclick="demoAddTopStudent()" class="p-2.5 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100/60 transition text-left group">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-amber-900 group-hover:text-amber-700">3. Capacity Squeeze</span>
+                <i class="ph-bold ph-users text-amber-600 text-xs"></i>
+              </div>
+              <p class="text-[11px] text-slate-600 mt-0.5">Add Priya (9.60) &rarr; Squeezes Cloud</p>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widescreen Dynamic Split Grid: Left Roster (8 cols), Right Seat Capacity (4 cols) -->
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left: Demo Students Table (8 cols) -->
+        <div class="xl:col-span-8 bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Demo Cohort (<span id="demo-student-count">10</span> Students)</h3>
+              <p class="text-xs text-slate-500">Tune CGPA with +/- buttons or edit course preferences to trigger live reallocation.</p>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                <tr>
+                  <th class="py-3 px-4">Student</th>
+                  <th class="py-3 px-4">CGPA (Quick Tune)</th>
+                  <th class="py-3 px-4">Course Choices</th>
+                  <th class="py-3 px-4">Allocation Outcome</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="demo-students-table-body" class="divide-y divide-slate-100 text-slate-700">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Right: Live Course Seat Capacity Status (4 cols) -->
+        <div class="xl:col-span-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Live Seat Capacity</h3>
+              <p class="text-[11px] text-slate-500">Enforced by <code>trg_before_allocation_insert</code></p>
+            </div>
+            <button onclick="testTriggerModal()" title="Simulate over-allocation trigger" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition">
+              <i class="ph-bold ph-lightning"></i> Test Trigger
+            </button>
+          </div>
+
+          <div id="demo-courses-bars" class="space-y-3">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 2: DASHBOARD & ALLOCATIONS -->
+    <!-- ===================================================================== -->
+    <section id="tab-dashboard" class="tab-pane hidden space-y-6">
+      
+      <!-- KPI Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-3.5">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 mb-1">
+            <span class="text-xs font-medium uppercase tracking-wider">Students</span>
+            <i class="ph ph-users text-lg text-brand-600"></i>
+          </div>
+          <div id="kpi-students" class="text-2xl font-bold text-slate-900">10</div>
+          <span class="text-[11px] text-slate-400">Total Enrolled</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 mb-1">
+            <span class="text-xs font-medium uppercase tracking-wider">Electives</span>
+            <i class="ph ph-book-open text-lg text-indigo-600"></i>
+          </div>
+          <div id="kpi-courses" class="text-2xl font-bold text-slate-900">4</div>
+          <span class="text-[11px] text-slate-400"><span id="kpi-total-seats">12</span> Total Seats</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 mb-1">
+            <span class="text-xs font-medium uppercase tracking-wider">Allotted</span>
+            <i class="ph ph-check-circle text-lg text-emerald-600"></i>
+          </div>
+          <div id="kpi-allotted-students" class="text-2xl font-bold text-emerald-600">7</div>
+          <span class="text-[11px] text-emerald-600 font-semibold" id="kpi-allot-rate">70% Placed</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 mb-1">
+            <span class="text-xs font-medium uppercase tracking-wider">Preferences</span>
+            <i class="ph ph-list-numbers text-lg text-blue-500"></i>
+          </div>
+          <div id="kpi-preferences" class="text-2xl font-bold text-blue-600">17</div>
+          <span class="text-[11px] text-slate-400">Submitted Choices</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 mb-1">
+            <span class="text-xs font-medium uppercase tracking-wider">Waitlisted</span>
+            <i class="ph ph-clock-countdown text-lg text-amber-500"></i>
+          </div>
+          <div id="kpi-waitlisted" class="text-2xl font-bold text-amber-600">1</div>
+          <span class="text-[11px] text-slate-400">Queue Applications</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between text-slate-500 mb-1">
+            <span class="text-xs font-medium uppercase tracking-wider">Rejected</span>
+            <i class="ph ph-x-circle text-lg text-rose-500"></i>
+          </div>
+          <div id="kpi-rejected" class="text-2xl font-bold text-rose-600">1</div>
+          <span class="text-[11px] text-slate-400">Below CGPA Cutoff</span>
+        </div>
+      </div>
+
+      <!-- COURSE CAPACITY SNAPSHOT -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-1.5">
+            <i class="ph-bold ph-gauge text-brand-600"></i>
+            <span>Course Seat Allocations & Capacity Invariants</span>
+          </h2>
+          <span class="text-xs text-slate-500" id="capacity-fill-summary">Live MySQL State</span>
+        </div>
+
+        <div id="course-cards-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- ALLOCATIONS TABLE WITH SEARCH, FILTER & PAGINATION -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Seat Allocations Record</h3>
+            <p class="text-xs text-slate-500">Showing <span id="allocations-showing-count">0</span> of <span id="allocations-total-count">0</span> allocation events</p>
+          </div>
+          
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Search -->
+            <div class="relative">
+              <i class="ph ph-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
+              <input type="text" id="alloc-search" placeholder="Search student / course..." oninput="onAllocSearchChange()" class="text-xs pl-7 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500 w-44">
+            </div>
+
+            <!-- Course Filter -->
+            <select id="filter-course" onchange="applyAllocFilters()" class="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <option value="ALL">All Electives</option>
+            </select>
+
+            <!-- Status Filter -->
+            <select id="filter-status" onchange="applyAllocFilters()" class="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <option value="ALL">All Statuses</option>
+              <option value="ALLOTTED">ALLOTTED</option>
+              <option value="WAITLISTED">WAITLISTED</option>
+              <option value="REJECTED">REJECTED</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+              <tr>
+                <th class="py-3 px-4"># ID</th>
+                <th class="py-3 px-4">Course</th>
+                <th class="py-3 px-4">Student Name</th>
+                <th class="py-3 px-4">CGPA</th>
+                <th class="py-3 px-4">Preference</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4">Allocated At</th>
+              </tr>
+            </thead>
+            <tbody id="allocations-table-body" class="divide-y divide-slate-100 text-slate-700">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Bar -->
+        <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
+          <div id="alloc-page-info">Showing page 1 of 1</div>
+          <div class="flex items-center space-x-1" id="alloc-pagination-btns">
+            <!-- Pagination buttons -->
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 3: ELECTIVE COURSE CATALOG -->
+    <!-- ===================================================================== -->
+    <section id="tab-courses" class="tab-pane hidden space-y-6">
+      
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Comprehensive Elective Course Offerings</h2>
+          <p class="text-xs text-slate-500">Specialized electives covering AI/ML, Cloud & Distributed Systems, Cybersecurity, Web Engineering, and Competitive Programming.</p>
+        </div>
+
+        <!-- Tag Filter Pills -->
+        <div class="flex flex-wrap items-center gap-1.5" id="course-tag-filters">
+          <button onclick="filterCoursesByTag('ALL')" class="tag-filter-btn active px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-600 text-white">All Specializations</button>
+        </div>
+      </div>
+
+      <!-- Course Catalog Cards (Fluid 4-column Widescreen Grid) -->
+      <div id="catalog-cards-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        <!-- Populated by JS -->
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 4: ALL STUDENTS & SHORTLIST INSPECTOR -->
+    <!-- ===================================================================== -->
+    <section id="tab-students" class="tab-pane hidden space-y-6">
+      
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+
+        <!-- Left Column: Searchable Student Roster (4 cols on XL) -->
+        <div class="xl:col-span-4 lg:col-span-5 space-y-3">
+          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-slate-900">Student Directory (<span id="students-filtered-count">0</span>)</h3>
+              <span class="text-[11px] text-slate-400">Click to inspect</span>
+            </div>
+
+            <!-- Search and Dept Filters -->
+            <div class="space-y-2">
+              <div class="relative">
+                <i class="ph ph-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-xs"></i>
+                <input type="text" id="stu-search" placeholder="Search by name, ID, or email..." oninput="onStudentSearchChange()" class="w-full text-xs pl-7 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              </div>
+
+              <div class="flex items-center space-x-1.5">
+                <select id="stu-filter-dept" onchange="onStudentSearchChange()" class="flex-1 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none">
+                  <option value="ALL">All Departments</option>
+                  <option value="CSE">CSE</option>
+                  <option value="ISE">ISE</option>
+                  <option value="AIML">AIML</option>
+                  <option value="AIDS">AIDS</option>
+                </select>
+
+                <select id="stu-filter-status" onchange="onStudentSearchChange()" class="flex-1 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none">
+                  <option value="ALL">All Status</option>
+                  <option value="ALLOTTED">Allotted Only</option>
+                  <option value="UNALLOTTED">Unallotted Only</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Student List Container -->
+            <div id="stu-list-container" class="max-h-[580px] overflow-y-auto divide-y divide-slate-100 pr-1 space-y-1">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Selected Student Shortlist & Preferences (8 cols on XL) -->
+        <div class="xl:col-span-8 lg:col-span-7 space-y-4">
+          
+          <!-- Selected Student Profile Banner -->
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-center space-x-3.5">
+              <div class="w-12 h-12 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-lg" id="stu-avatar">AS</div>
+              <div>
+                <div class="flex items-center space-x-2">
+                  <h3 id="stu-name" class="font-bold text-slate-900 text-base">Aarav Shah</h3>
+                  <span id="stu-status-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold badge-allotted">ALLOTTED</span>
+                </div>
+                <p id="stu-email" class="text-xs text-slate-500 font-mono">aarav@sjce.edu</p>
+                <div class="flex items-center space-x-2 mt-1">
+                  <span id="stu-sem-dept" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">Sem V • CSE</span>
+                  <span id="stu-cgpa-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">CGPA 8.70</span>
+                  <span id="stu-allotted-course-text" class="text-xs text-emerald-700 font-semibold"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Declared Tag Badges -->
+            <div class="text-right">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Declared Interest Tags</span>
+              <div id="stu-tag-badges" class="flex flex-wrap justify-end gap-1">
+                <!-- Tag Badges -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic Shortlist Table (View v_student_shortlist) -->
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div>
+                <div class="flex items-center space-x-2">
+                  <h4 class="font-bold text-sm text-slate-900">Personalized Shortlist (v_student_shortlist)</h4>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">SQL VIEW</span>
+                </div>
+                <p class="text-xs text-slate-500">Filtered for matching interest tags AND meeting <code>s.cgpa &gt;= c.min_cgpa_required</code></p>
+              </div>
+              <span id="shortlist-count-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">Eligible Courses</span>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[10px]">
+                  <tr>
+                    <th class="py-2.5 px-3">Course Code</th>
+                    <th class="py-2.5 px-3">Elective Title</th>
+                    <th class="py-2.5 px-3">Tag Match Rank</th>
+                    <th class="py-2.5 px-3">Prerequisite Status</th>
+                  </tr>
+                </thead>
+                <tbody id="shortlist-table-body" class="divide-y divide-slate-100">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Student's Submitted Course Choices -->
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div>
+                <div class="flex items-center space-x-2">
+                  <h4 class="font-bold text-sm text-slate-900">Submitted Course Choices (student_course_preferences)</h4>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-800">RELATIONAL TABLE</span>
+                </div>
+                <p class="text-xs text-slate-500">Student's ranked preferences with timestamp audit and engine outcome</p>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[10px]">
+                  <tr>
+                    <th class="py-2.5 px-3">Preference Rank</th>
+                    <th class="py-2.5 px-3">Course Code & Name</th>
+                    <th class="py-2.5 px-3">Min Cutoff</th>
+                    <th class="py-2.5 px-3">Submitted Timestamp</th>
+                    <th class="py-2.5 px-3">Allocation Disposition</th>
+                  </tr>
+                </thead>
+                <tbody id="stu-course-prefs-body" class="divide-y divide-slate-100">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 5: ALLOCATION ENGINE & LOGIC -->
+    <!-- ===================================================================== -->
+    <section id="tab-engine" class="tab-pane hidden space-y-6">
+      
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-900 mb-2">Deterministic Multi-Tier Allocation Engine</h2>
+        <p class="text-xs text-slate-600 leading-relaxed mb-6">
+          The allocation engine is executed by <code>CALL run_full_allocation_cycle();</code> which loops over all courses via cursor and invokes <code>allocate_courses(course_id)</code>. Ties are resolved strictly using window function <code>ROW_NUMBER()</code> across four hierarchical criteria:
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="p-4 rounded-xl border border-blue-200 bg-blue-50/50">
+            <div class="w-8 h-8 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center text-sm mb-2">1</div>
+            <h4 class="font-bold text-sm text-blue-900">Academic Merit</h4>
+            <code class="text-[11px] text-blue-700 font-semibold block mt-1">s.cgpa DESC</code>
+            <p class="text-xs text-slate-600 mt-2">Highest CGPA always gets first priority for elective seats.</p>
+          </div>
+
+          <div class="p-4 rounded-xl border border-indigo-200 bg-indigo-50/50">
+            <div class="w-8 h-8 rounded-lg bg-indigo-600 text-white font-bold flex items-center justify-center text-sm mb-2">2</div>
+            <h4 class="font-bold text-sm text-indigo-900">Student Preference</h4>
+            <code class="text-[11px] text-indigo-700 font-semibold block mt-1">scp.preference_rank ASC</code>
+            <p class="text-xs text-slate-600 mt-2">Student who ranked the subject higher wins seat on CGPA tie.</p>
+          </div>
+
+          <div class="p-4 rounded-xl border border-teal-200 bg-teal-50/50">
+            <div class="w-8 h-8 rounded-lg bg-teal-600 text-white font-bold flex items-center justify-center text-sm mb-2">3</div>
+            <h4 class="font-bold text-sm text-teal-900">Timestamp Audit</h4>
+            <code class="text-[11px] text-teal-700 font-semibold block mt-1">scp.submitted_at ASC</code>
+            <p class="text-xs text-slate-600 mt-2">Earlier submission wins tie (first-come, first-served audit).</p>
+          </div>
+
+          <div class="p-4 rounded-xl border border-purple-200 bg-purple-50/50">
+            <div class="w-8 h-8 rounded-lg bg-purple-600 text-white font-bold flex items-center justify-center text-sm mb-2">4</div>
+            <h4 class="font-bold text-sm text-purple-900">Deterministic Key</h4>
+            <code class="text-[11px] text-purple-700 font-semibold block mt-1">s.student_id ASC</code>
+            <p class="text-xs text-slate-600 mt-2">Surrogate key tie-break guarantees reproducible integer rank.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Known Design Decision Callout -->
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-5 flex items-start space-x-4">
+        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl flex-shrink-0">
+          <i class="ph-bold ph-info"></i>
+        </div>
+        <div>
+          <h4 class="font-bold text-sm text-amber-900">Documented Institutional Rule: Dual-Status Behavior</h4>
+          <p class="text-xs text-amber-800 mt-1 leading-relaxed">
+            A student can be <code>WAITLISTED</code> in an oversubscribed course of higher preference and subsequently obtain an <code>ALLOTTED</code> seat in a lower-preference course evaluated later in the cycle. This guarantees students are not denied an elective seat simply because their first choice reached maximum capacity.
+          </p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 6: CUTOFF & INVARIANT TESTS -->
+    <!-- ===================================================================== -->
+    <section id="tab-lab" class="tab-pane hidden space-y-6">
+      
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-base font-bold text-slate-900 mb-1">Interactive DBMS Experimentation Playground</h2>
+        <p class="text-xs text-slate-500 mb-6">Test database-level integrity guards, domain constraints, and reactive view recalculations live.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          <!-- Experiment 1: Anika Boundary Test -->
+          <div class="p-5 rounded-xl border border-blue-200 bg-blue-50/30 space-y-4">
+            <div class="flex items-center space-x-2">
+              <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm">A</div>
+              <div>
+                <h3 class="font-bold text-sm text-slate-900">Prerequisite Cutoff Boundary Test</h3>
+                <p class="text-[11px] text-slate-500">Student Anika Joshi (Course 24CS551 min CGPA 6.50)</p>
+              </div>
+            </div>
+
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Toggle Anika's CGPA across the 6.50 cutoff and observe how <code>v_student_shortlist</code> immediately includes or excludes the course!
+            </p>
+
+            <div class="flex items-center space-x-3">
+              <button onclick="setAnikaCGPA(6.50)" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition">
+                Set CGPA = 6.50 (Eligible)
+              </button>
+              <button onclick="setAnikaCGPA(6.49)" class="px-3.5 py-2 rounded-lg text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 transition">
+                Set CGPA = 6.49 (Filtered Out)
+              </button>
+            </div>
+
+            <div id="anika-result-box" class="p-3 bg-white rounded-lg border border-slate-200 text-xs text-slate-700">
+              Current CGPA: <strong id="anika-cur-cgpa">6.50</strong> • Shortlist count: <strong id="anika-shortlist-count">1</strong>
+            </div>
+          </div>
+
+          <!-- Experiment 2: Trigger Capacity Violation Guard -->
+          <div class="p-5 rounded-xl border border-amber-200 bg-amber-50/30 space-y-4">
+            <div class="flex items-center space-x-2">
+              <div class="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center font-bold text-sm">B</div>
+              <div>
+                <h3 class="font-bold text-sm text-slate-900">Capacity Guard Trigger (trg_before_allocation_insert)</h3>
+                <p class="text-[11px] text-slate-500">MySQL Exception 45000: 'Course full: cannot allot'</p>
+              </div>
+            </div>
+
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Test what happens when an insert attempts to add an ALLOTTED row when a course has reached its quota. The trigger raises a custom SQLSTATE exception!
+            </p>
+
+            <div>
+              <button onclick="testTriggerModal()" class="px-4 py-2 rounded-lg text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 transition inline-flex items-center space-x-1.5">
+                <i class="ph-bold ph-lightning"></i>
+                <span>Fire Over-Allocation Attempt</span>
+              </button>
+            </div>
+
+            <div id="trigger-result-box" class="p-3 bg-white rounded-lg border border-slate-200 text-xs text-slate-600">
+              Click the button above to execute the live transaction test.
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- TAB 7: SCHEMA & ER DIAGRAM -->
+    <!-- ===================================================================== -->
+    <section id="tab-schema" class="tab-pane hidden space-y-6">
+      
+      <!-- ER Diagram Card -->
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Entity-Relationship (ER) Diagram</h2>
+            <p class="text-xs text-slate-500">7 BCNF/3NF Relational Tables with 1..N Cardinality and Cascading Deletes</p>
+          </div>
+          <a href="/static/er_diagram.png" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline inline-flex items-center space-x-1">
+            <span>Open High-Res PNG</span>
+            <i class="ph ph-arrow-square-out"></i>
+          </a>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center p-4">
+          <img src="/static/er_diagram.png" alt="Entity-Relationship Diagram" class="max-w-full max-h-[720px] object-contain rounded-lg shadow-sm mx-auto">
+        </div>
+      </div>
+
+      <!-- Relational Schema Breakdown -->
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Relational Schema Definition Summary</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50">
+            <strong class="text-brand-900 text-sm">students</strong>
+            <p class="text-slate-600 mt-1 font-mono text-[11px]">(student_id PK AI, name, email UNIQUE, semester, department, cgpa CHECK 0.00..10.00)</p>
+          </div>
+          <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50">
+            <strong class="text-brand-900 text-sm">courses</strong>
+            <p class="text-slate-600 mt-1 font-mono text-[11px]">(course_id PK AI, course_code UNIQUE, course_name, credits CHECK>0, min_cgpa_required, max_allocations, current_allocations, department)</p>
+          </div>
+          <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50">
+            <strong class="text-brand-900 text-sm">course_tags</strong>
+            <p class="text-slate-600 mt-1 font-mono text-[11px]">(tag_id PK AI, tag_name UNIQUE)</p>
+          </div>
+          <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50">
+            <strong class="text-brand-900 text-sm">course_tag_map</strong>
+            <p class="text-slate-600 mt-1 font-mono text-[11px]">(course_id FK, tag_id FK, PK(course_id, tag_id)) ON DELETE CASCADE</p>
+          </div>
+          <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50">
+            <strong class="text-brand-900 text-sm">student_tag_preferences</strong>
+            <p class="text-slate-600 mt-1 font-mono text-[11px]">(student_id FK, tag_id FK, preference_rank CHECK>0, PK(student_id, tag_id)) ON DELETE CASCADE</p>
+          </div>
+          <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50">
+            <strong class="text-brand-900 text-sm">student_course_preferences</strong>
+            <p class="text-slate-600 mt-1 font-mono text-[11px]">(student_id FK, course_id FK, preference_rank CHECK>0, submitted_at, PK(student_id, course_id)) ON DELETE CASCADE</p>
+          </div>
+          <div class="p-3.5 rounded-lg border border-slate-200 bg-slate-50 md:col-span-2">
+            <strong class="text-brand-900 text-sm">allocations</strong>
+            <p class="text-slate-600 mt-1 font-mono text-[11px]">(allocation_id PK AI, student_id FK, course_id FK, status ENUM('ALLOTTED','WAITLISTED','REJECTED'), allocated_at, UNIQUE(student_id, course_id)) ON DELETE CASCADE</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODALS: ADD STUDENT & EDIT STUDENT & TRIGGER -->
+  <!-- ===================================================================== -->
+
+  <!-- MODAL: ADD NEW STUDENT -->
+  <div id="modal-add-student" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center space-x-2 text-brand-900 font-bold text-base">
+          <i class="ph-bold ph-user-plus text-xl text-emerald-600"></i>
+          <span>Enroll New Student in Cohort</span>
+        </div>
+        <button onclick="closeModal('modal-add-student')" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+      </div>
+
+      <form id="form-add-student" onsubmit="submitAddStudent(event)" class="space-y-3.5 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Full Name *</label>
+            <input type="text" id="add-stu-name" required placeholder="e.g. Arjun Rao" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 focus:ring-1 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Email *</label>
+            <input type="email" id="add-stu-email" required placeholder="e.g. arjun@sjce.edu" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 focus:ring-1 focus:ring-brand-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">CGPA (0.00-10.00) *</label>
+            <input type="number" id="add-stu-cgpa" required step="0.01" min="0" max="10" placeholder="8.50" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold font-mono focus:ring-1 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Semester</label>
+            <input type="text" id="add-stu-sem" value="V" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-slate-50 font-semibold" readonly>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Department</label>
+            <select id="add-stu-dept" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300">
+              <option value="CSE">CSE</option>
+              <option value="ISE">ISE</option>
+              <option value="AIML">AIML</option>
+              <option value="AIDS">AIDS</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tag Preferences -->
+        <div class="pt-2 border-t border-slate-100">
+          <label class="block font-semibold text-slate-700 mb-1">Select Interest Tags (Ranked by selection order):</label>
+          <div id="add-tag-checkboxes" class="grid grid-cols-2 gap-1.5 max-h-24 overflow-y-auto p-1 bg-slate-50 rounded-lg border border-slate-200">
+            <!-- Injected by JS -->
+          </div>
+        </div>
+
+        <!-- Course Choices -->
+        <div class="pt-2 border-t border-slate-100 space-y-2">
+          <label class="block font-semibold text-slate-700">Ranked Course Selections:</label>
+          <div class="grid grid-cols-1 gap-2">
+            <div class="flex items-center space-x-2">
+              <span class="w-16 font-bold text-slate-500">Choice 1:</span>
+              <select id="add-course-1" required class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 select-course-dropdown">
+                <!-- Courses -->
+              </select>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="w-16 font-bold text-slate-500">Choice 2:</span>
+              <select id="add-course-2" required class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 select-course-dropdown">
+                <!-- Courses -->
+              </select>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="w-16 font-bold text-slate-500">Choice 3:</span>
+              <select id="add-course-3" class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 select-course-dropdown">
+                <option value="">-- Optional Choice 3 --</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+          <button type="button" onclick="closeModal('modal-add-student')" class="px-3.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 font-medium">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm">Enroll & Recalculate</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT STUDENT DETAILS -->
+  <div id="modal-edit-student" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center space-x-2 text-brand-900 font-bold text-base">
+          <i class="ph-bold ph-pencil-simple text-xl text-brand-600"></i>
+          <span>Modify Student Details</span>
+        </div>
+        <button onclick="closeModal('modal-edit-student')" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+      </div>
+
+      <form id="form-edit-student" onsubmit="submitEditStudent(event)" class="space-y-3.5 text-xs">
+        <input type="hidden" id="edit-stu-id">
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Student Name</label>
+          <input type="text" id="edit-stu-name" required class="w-full px-3 py-1.5 rounded-lg border border-slate-300">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Email</label>
+          <input type="email" id="edit-stu-email" required class="w-full px-3 py-1.5 rounded-lg border border-slate-300">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">CGPA (0.00 - 10.00)</label>
+            <input type="number" id="edit-stu-cgpa" required step="0.01" min="0" max="10" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-bold font-mono">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Department</label>
+            <select id="edit-stu-dept" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300">
+              <option value="CSE">CSE</option>
+              <option value="ISE">ISE</option>
+              <option value="AIML">AIML</option>
+              <option value="AIDS">AIDS</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-slate-100 space-y-2">
+          <label class="block font-semibold text-slate-700">Update Course Choices:</label>
+          <div class="space-y-1.5">
+            <select id="edit-course-1" required class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 select-course-dropdown">
+              <!-- Choices -->
+            </select>
+            <select id="edit-course-2" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 select-course-dropdown">
+              <!-- Choices -->
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+          <button type="button" onclick="closeModal('modal-edit-student')" class="px-3.5 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 font-medium">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-bold shadow-sm">Save & Recalculate</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: TRIGGER TEST RESULT -->
+  <div id="modal-trigger" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center space-x-2 text-amber-600 font-bold text-sm">
+          <i class="ph-bold ph-shield-check text-xl"></i>
+          <span>Trigger Capacity Guard Verified</span>
+        </div>
+        <button onclick="closeModal('modal-trigger')" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+      </div>
+
+      <div class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2">
+        <p class="font-bold text-sm">MySQL Exception Signal Caught (SQLSTATE 45000):</p>
+        <code class="block bg-amber-100/80 p-2.5 rounded font-mono text-[11px] text-amber-950 font-semibold" id="modal-err-text">
+          ERROR 1644 (45000): Course full: cannot allot
+        </code>
+      </div>
+
+      <div class="text-xs text-slate-600 space-y-2 leading-relaxed">
+        <p><strong>Trigger Name:</strong> <code>trg_before_allocation_insert</code></p>
+        <p><strong>Course Tested:</strong> <span id="modal-course-name">24CS551 Image Processing</span></p>
+        <p><strong>Mechanism:</strong> When an insert specifies <code>status = 'ALLOTTED'</code> and the course has reached capacity (<code>current_allocations &gt;= max_allocations</code>), the trigger immediately fires <code>SIGNAL SQLSTATE '45000'</code>.</p>
+        <p><strong>Guarantee:</strong> Even direct SQL inserts from external applications cannot breach seat quotas!</p>
+      </div>
+
+      <div class="pt-2 text-right">
+        <button onclick="closeModal('modal-trigger')" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition">
+          Close Window
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION SCRIPTS -->
+  <script>
+    let globalOverview = null;
+    let globalCourses = [];
+    let globalTags = [];
+    let allStudents = [];
+    let demoStudents = [];
+    let selectedStudentId = 1;
+    let currentCourseTagFilter = 'ALL';
+
+    // Allocations Pagination State
+    let allAllocations = [];
+    let filteredAllocations = [];
+    let allocCurrentPage = 1;
+    const allocPageSize = 15;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadTags();
+      await loadCoursesCatalog();
+      await loadOverview();
+      await loadDemoStudents();
+      await loadStudentsList();
+      populateCourseDropdowns();
+    });
+
+    async function loadTags() {
+      try {
+        const res = await fetch('/api/tags');
+        globalTags = await res.json();
+        
+        // Populate Add Student Tag Checkboxes
+        const container = document.getElementById('add-tag-checkboxes');
+        container.innerHTML = globalTags.map(t => `
+          <label class="flex items-center space-x-1.5 cursor-pointer text-[11px] text-slate-700">
+            <input type="checkbox" name="add_tags" value="${t.tag_id}" class="rounded text-brand-600">
+            <span>${t.tag_name}</span>
+          </label>
+        `).join('');
+      } catch (e) {
+        console.error("Failed to load tags", e);
+      }
+    }
+
+    function populateCourseDropdowns() {
+      const dropdowns = document.querySelectorAll('.select-course-dropdown');
+      dropdowns.forEach(dd => {
+        const isOpt = dd.id.includes('3');
+        dd.innerHTML = (isOpt ? `<option value="">-- Optional Choice 3 --</option>` : '') +
+          globalCourses.map(c => `
+            <option value="${c.course_id}">${c.course_code} - ${c.course_name} (Min ${c.min_cgpa_required})</option>
+          `).join('');
+      });
+    }
+
+    // =========================================================================
+    // DEMO SANDBOX TAB LOGIC (10 STUDENTS)
+    // =========================================================================
+    async function loadDemoStudents() {
+      try {
+        const res = await fetch('/api/demo/students');
+        demoStudents = await res.json();
+        renderDemoCohort();
+      } catch (e) {
+        console.error("Failed to load demo students", e);
+      }
+    }
+
+    function renderDemoCohort() {
+      document.getElementById('demo-student-count').innerText = demoStudents.length;
+      const tbody = document.getElementById('demo-students-table-body');
+
+      if (demoStudents.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400 italic">No students in cohort</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = demoStudents.map(s => {
+        const isAllotted = s.allotted_status === 'ALLOTTED';
+        const outcomeBadge = isAllotted
+          ? `<span class="inline-flex items-center px-2.5 py-1 rounded-full font-bold text-xs badge-allotted"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>ALLOTTED: ${s.allotted_course}</span>`
+          : `<span class="inline-flex items-center px-2.5 py-1 rounded-full font-semibold text-xs badge-unallotted"><span class="w-1.5 h-1.5 rounded-full bg-slate-400 mr-1.5"></span>UNALLOTTED</span>`;
+
+        const choicesList = s.course_preferences.map(cp => {
+          let cbadge = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+          if (cp.alloc_status === 'WAITLISTED') cbadge = 'bg-amber-50 text-amber-800 border-amber-200';
+          if (cp.alloc_status === 'REJECTED') cbadge = 'bg-rose-50 text-rose-800 border-rose-200';
+          return `
+            <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${cbadge}">
+              <span>#${cp.preference_rank} ${cp.course_code}</span>
+              <span class="text-[9px] uppercase opacity-75 font-bold">(${cp.alloc_status.slice(0,4)})</span>
+            </span>
+          `;
+        }).join(' ');
+
+        return `
+          <tr class="hover:bg-slate-50/70 transition">
+            <td class="py-3 px-4">
+              <div class="flex items-center space-x-2.5">
+                <div class="w-8 h-8 rounded-full bg-brand-100 text-brand-800 font-bold flex items-center justify-center text-xs flex-shrink-0">
+                  ${s.name.split(' ').map(n=>n[0]).join('')}
+                </div>
+                <div>
+                  <h4 class="font-bold text-slate-900">${s.name}</h4>
+                  <p class="text-[10px] text-slate-400">${s.department} • <span class="font-mono">${s.email}</span></p>
+                </div>
+              </div>
+            </td>
+
+            <td class="py-3 px-4">
+              <div class="flex items-center space-x-1.5">
+                <span class="font-mono font-bold text-sm text-slate-900 w-12">${s.cgpa}</span>
+                <button onclick="quickTuneCGPA(${s.student_id}, ${s.cgpa}, -0.1)" title="Decrease 0.1" class="w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center transition active:scale-95">-</button>
+                <button onclick="quickTuneCGPA(${s.student_id}, ${s.cgpa}, +0.1)" title="Increase 0.1" class="w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center transition active:scale-95">+</button>
+              </div>
+            </td>
+
+            <td class="py-3 px-4 space-y-1">
+              <div class="flex flex-wrap gap-1">${choicesList || '<span class="text-slate-400 italic">No choices</span>'}</div>
+            </td>
+
+            <td class="py-3 px-4">
+              ${outcomeBadge}
+            </td>
+
+            <td class="py-3 px-4 text-right space-x-1">
+              <button onclick="openEditStudentModal(${s.student_id})" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs transition inline-flex items-center space-x-1">
+                <i class="ph ph-pencil"></i><span>Edit</span>
+              </button>
+              <button onclick="deleteDemoStudent(${s.student_id}, '${s.name}')" class="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-medium text-xs transition" title="Delete Student">
+                <i class="ph ph-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      // Update Demo course bars
+      renderDemoCourseBars();
+    }
+
+    function renderDemoCourseBars() {
+      const container = document.getElementById('demo-courses-bars');
+      if (!globalOverview || !globalOverview.courses) return;
+
+      const coursesToShow = globalOverview.courses.slice(0, 6);
+      container.innerHTML = coursesToShow.map(c => {
+        const isFull = parseInt(c.current_allocations) >= parseInt(c.max_allocations);
+        const barColor = isFull ? 'bg-rose-500' : 'bg-brand-600';
+        const badgeClass = isFull ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800';
+        const badgeText = isFull ? 'FULL' : `${c.seats_remaining} left`;
+
+        return `
+          <div class="p-3 bg-slate-50/80 border border-slate-200/80 rounded-xl space-y-2 hover:bg-slate-50 transition">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="font-bold text-xs text-slate-900">${c.course_code}</span>
+                <span class="text-[11px] text-slate-500 ml-1.5 truncate max-w-[140px] inline-block align-bottom" title="${c.course_name}">${c.course_name}</span>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${badgeText}</span>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-[10px] text-slate-500 mb-1 font-medium">
+                <span>Allocated: <strong>${c.current_allocations}</strong> / ${c.max_allocations}</span>
+                <span>${c.fill_pct}%</span>
+              </div>
+              <div class="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                <div class="${barColor} h-2 rounded-full transition-all duration-500" style="width: ${c.fill_pct}%"></div>
+              </div>
+            </div>
+
+            <div class="flex justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200/50">
+              <span>Min CGPA: <strong>${c.min_cgpa_required}</strong></span>
+              <span>${c.credits} Credits</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Quick tune CGPA
+    async function quickTuneCGPA(studentId, currentCgpa, delta) {
+      const newCgpa = Math.max(0.0, Math.min(10.0, parseFloat((currentCgpa + delta).toFixed(2))));
+      try {
+        const res = await fetch('/api/update-cgpa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ student_id: studentId, cgpa: newCgpa })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, "success");
+          await fetch('/api/run-cycle', { method: 'POST' });
+          await refreshAllData();
+        }
+      } catch (e) {
+        showToast("Failed to update CGPA", "error");
+      }
+    }
+
+    // Scenario 1: Boost Kabir
+    async function demoBoostKabir() {
+      await quickTuneCGPA(3, 6.80, 1.40); // 6.80 + 1.40 = 8.20 (qualifies for CP cutoff 8.00)
+    }
+
+    // Scenario 2: Drop Anika
+    async function demoDropAnika() {
+      await quickTuneCGPA(8, 6.50, -0.01); // 6.50 - 0.01 = 6.49 (drops below IP cutoff 6.50)
+    }
+
+    // Scenario 3: Add Top Student
+    async function demoAddTopStudent() {
+      try {
+        const res = await fetch('/api/demo/add-student', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: "Priya Sharma",
+            email: "priya.sharma@sjce.edu",
+            semester: "V",
+            department: "CSE",
+            cgpa: 9.60,
+            tag_ids: [1, 3],
+            course_ids: [3, 1] // 1st choice Cloud Computing (cap 2)
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, "success");
+          await refreshAllData();
+        }
+      } catch (e) {
+        showToast("Error adding topper", "error");
+      }
+    }
+
+    // Reset Demo to 10 Students
+    async function resetDemoTo10() {
+      if (!confirm("Reset database to clean 10-student cohort baseline?")) return;
+      try {
+        showToast("Resetting to 10 demo students...", "info");
+        const res = await fetch('/api/demo/reset-10-students', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, "success");
+          document.getElementById('select-dataset').value = '10_students';
+          await refreshAllData();
+        }
+      } catch (e) {
+        showToast("Reset error", "error");
+      }
+    }
+
+    // Open Add Student Modal
+    function openAddStudentModal() {
+      document.getElementById('form-add-student').reset();
+      populateCourseDropdowns();
+      document.getElementById('modal-add-student').classList.remove('hidden');
+    }
+
+    // Submit Add Student
+    async function submitAddStudent(e) {
+      e.preventDefault();
+      const name = document.getElementById('add-stu-name').value.trim();
+      const email = document.getElementById('add-stu-email').value.trim();
+      const cgpa = parseFloat(document.getElementById('add-stu-cgpa').value);
+      const semester = document.getElementById('add-stu-sem').value;
+      const department = document.getElementById('add-stu-dept').value;
+
+      // Tags
+      const tagCheckboxes = document.querySelectorAll('input[name="add_tags"]:checked');
+      const tag_ids = Array.from(tagCheckboxes).map(cb => parseInt(cb.value));
+
+      // Courses
+      const c1 = parseInt(document.getElementById('add-course-1').value);
+      const c2 = parseInt(document.getElementById('add-course-2').value);
+      const c3Val = document.getElementById('add-course-3').value;
+      const course_ids = [c1, c2];
+      if (c3Val) course_ids.push(parseInt(c3Val));
+
+      try {
+        const res = await fetch('/api/demo/add-student', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name, email, semester, department, cgpa, tag_ids, course_ids
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, "success");
+          closeModal('modal-add-student');
+          await refreshAllData();
+        } else {
+          showToast(`Error: ${data.error}`, "error");
+        }
+      } catch (e) {
+        showToast("Failed to add student", "error");
+      }
+    }
+
+    // Open Edit Student Modal
+    function openEditStudentModal(studentId) {
+      const student = demoStudents.find(s => s.student_id == studentId);
+      if (!student) return;
+
+      document.getElementById('edit-stu-id').value = student.student_id;
+      document.getElementById('edit-stu-name').value = student.name;
+      document.getElementById('edit-stu-email').value = student.email;
+      document.getElementById('edit-stu-cgpa').value = student.cgpa;
+      document.getElementById('edit-stu-dept').value = student.department;
+
+      populateCourseDropdowns();
+
+      if (student.course_preferences.length > 0) {
+        document.getElementById('edit-course-1').value = student.course_preferences[0].course_id;
+      }
+      if (student.course_preferences.length > 1) {
+        document.getElementById('edit-course-2').value = student.course_preferences[1].course_id;
+      }
+
+      document.getElementById('modal-edit-student').classList.remove('hidden');
+    }
+
+    // Submit Edit Student
+    async function submitEditStudent(e) {
+      e.preventDefault();
+      const student_id = parseInt(document.getElementById('edit-stu-id').value);
+      const name = document.getElementById('edit-stu-name').value.trim();
+      const email = document.getElementById('edit-stu-email').value.trim();
+      const cgpa = parseFloat(document.getElementById('edit-stu-cgpa').value);
+      const department = document.getElementById('edit-stu-dept').value;
+
+      const c1 = parseInt(document.getElementById('edit-course-1').value);
+      const c2 = parseInt(document.getElementById('edit-course-2').value);
+      const course_ids = [c1, c2];
+
+      try {
+        const res = await fetch('/api/demo/update-student', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id, name, email, cgpa, department, course_ids
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, "success");
+          closeModal('modal-edit-student');
+          await refreshAllData();
+        } else {
+          showToast(`Error: ${data.error}`, "error");
+        }
+      } catch (e) {
+        showToast("Update failed", "error");
+      }
+    }
+
+    // Delete Demo Student
+    async function deleteDemoStudent(studentId, name) {
+      if (!confirm(`Delete student "${name}"? This also tests ON DELETE CASCADE referential cleanup!`)) return;
+      try {
+        const res = await fetch('/api/demo/delete-student', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ student_id: studentId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, "success");
+          await refreshAllData();
+        }
+      } catch (e) {
+        showToast("Delete failed", "error");
+      }
+    }
+
+    // Refresh all state
+    async function refreshAllData() {
+      await loadOverview();
+      await loadDemoStudents();
+      await loadCoursesCatalog();
+      await loadStudentsList();
+    }
+
+    // Switch Dataset
+    async function switchDataset(datasetType) {
+      try {
+        showToast("Switching cohort...", "info");
+        const res = await fetch('/api/reset-database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataset: datasetType })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, "success");
+          await refreshAllData();
+        }
+      } catch (e) {
+        showToast("Failed to switch dataset", "error");
+      }
+    }
+
+    // Load Overview
+    async function loadOverview() {
+      try {
+        const res = await fetch('/api/overview');
+        const data = await res.json();
+        globalOverview = data;
+
+        document.getElementById('kpi-students').innerText = data.counts.students;
+        document.getElementById('kpi-courses').innerText = data.counts.courses;
+        document.getElementById('kpi-total-seats').innerText = data.total_capacity;
+        document.getElementById('kpi-allotted-students').innerText = data.allotted_students_count;
+        document.getElementById('kpi-preferences').innerText = data.counts.preferences;
+        document.getElementById('kpi-waitlisted').innerText = data.status_summary['WAITLISTED'] || 0;
+        document.getElementById('kpi-rejected').innerText = data.status_summary['REJECTED'] || 0;
+
+        const rate = Math.round((data.allotted_students_count / data.counts.students) * 100) || 0;
+        document.getElementById('kpi-allot-rate').innerText = `${rate}% Placed`;
+        document.getElementById('capacity-fill-summary').innerText = `${data.total_allotted} of ${data.total_capacity} seats taken (${Math.round((data.total_allotted/data.total_capacity)*100)}% utilization)`;
+
+        // Update filter-course dropdown in allocations table
+        const cFilter = document.getElementById('filter-course');
+        const currVal = cFilter.value;
+        cFilter.innerHTML = `<option value="ALL">All Electives</option>` + data.courses.map(c => `
+          <option value="${c.course_code}">${c.course_code} (${c.course_name.split(' ')[0]})</option>
+        `).join('');
+        cFilter.value = currVal;
+
+        // Render course cards
+        const container = document.getElementById('course-cards-container');
+        container.innerHTML = data.courses.map(c => {
+          const isFull = parseInt(c.current_allocations) >= parseInt(c.max_allocations);
+          const badgeClass = isFull ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800';
+          const badgeText = isFull ? 'FULL (0 LEFT)' : `${c.seats_remaining} SEATS LEFT`;
+          const barColor = isFull ? 'bg-rose-500' : 'bg-brand-600';
+
+          return `
+            <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5 hover:shadow-md transition">
+              <div class="flex items-start justify-between">
+                <div>
+                  <span class="text-xs font-bold text-slate-900">${c.course_code}</span>
+                  <h4 class="text-xs font-semibold text-slate-700 line-clamp-1" title="${c.course_name}">${c.course_name}</h4>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${badgeText}</span>
+              </div>
+
+              <div>
+                <div class="flex justify-between text-[11px] text-slate-500 mb-1 font-medium">
+                  <span>Seats: ${c.current_allocations} / ${c.max_allocations}</span>
+                  <span>${c.fill_pct}%</span>
+                </div>
+                <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div class="${barColor} h-2 rounded-full transition-all duration-500" style="width: ${c.fill_pct}%"></div>
+                </div>
+              </div>
+
+              <div class="flex justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+                <span>Min CGPA: <strong>${c.min_cgpa_required}</strong></span>
+                <span>Credits: ${c.credits}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        loadAllocations();
+      } catch (e) {
+        console.error("Error loading overview", e);
+      }
+    }
+
+    // Load Course Catalog
+    async function loadCoursesCatalog() {
+      try {
+        const res = await fetch('/api/courses');
+        globalCourses = await res.json();
+        document.getElementById('nav-courses-count').innerText = globalCourses.length;
+
+        const allTags = new Set();
+        globalCourses.forEach(c => c.tags.forEach(t => allTags.add(t)));
+
+        const tagFilterContainer = document.getElementById('course-tag-filters');
+        tagFilterContainer.innerHTML = `<button onclick="filterCoursesByTag('ALL')" class="tag-filter-btn px-2.5 py-1 rounded-full text-xs font-semibold ${currentCourseTagFilter==='ALL' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">All (${globalCourses.length})</button>` +
+          Array.from(allTags).map(t => `
+            <button onclick="filterCoursesByTag('${t}')" class="tag-filter-btn px-2.5 py-1 rounded-full text-xs font-semibold ${currentCourseTagFilter===t ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">${t}</button>
+          `).join('');
+
+        renderCoursesCatalog();
+      } catch (e) {
+        console.error("Failed to load catalog", e);
+      }
+    }
+
+    function filterCoursesByTag(tag) {
+      currentCourseTagFilter = tag;
+      renderCoursesCatalog();
+    }
+
+    function renderCoursesCatalog() {
+      const filtered = (currentCourseTagFilter === 'ALL')
+        ? globalCourses
+        : globalCourses.filter(c => c.tags.includes(currentCourseTagFilter));
+
+      const container = document.getElementById('catalog-cards-container');
+      container.innerHTML = filtered.map(c => {
+        const isFull = parseInt(c.current_allocations) >= parseInt(c.max_allocations);
+        const enrolled = c.enrolled_students || [];
+
+        return `
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4 hover:shadow-md transition">
+            <div class="flex items-start justify-between">
+              <div>
+                <span class="text-xs font-bold text-brand-700">${c.course_code} • ${c.department}</span>
+                <h3 class="text-base font-bold text-slate-900 mt-0.5">${c.course_name}</h3>
+              </div>
+              <span class="px-2.5 py-1 rounded-lg text-xs font-bold ${isFull ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
+                ${c.current_allocations} / ${c.max_allocations} Seats
+              </span>
+            </div>
+
+            <div class="flex flex-wrap gap-1.5">
+              ${c.tags.map(t => `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">${t}</span>`).join('')}
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+              <div>Credits: <strong>${c.credits}</strong></div>
+              <div>Min CGPA: <strong>${c.min_cgpa_required}</strong></div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100">
+              <div class="flex items-center justify-between text-xs text-slate-500 mb-2 font-medium">
+                <span>Allotted Students (${enrolled.length}):</span>
+                ${enrolled.length > 0 ? `<span class="text-[10px] text-slate-400">Ranked by CGPA</span>` : ''}
+              </div>
+              
+              <div class="max-h-28 overflow-y-auto space-y-1 text-xs">
+                ${enrolled.length === 0 ? `<p class="text-slate-400 italic text-[11px]">No students allotted yet</p>` :
+                  enrolled.map((s, idx) => `
+                    <div class="flex items-center justify-between py-0.5 text-[11px]">
+                      <span class="text-slate-700 font-medium">${idx+1}. ${s.name}</span>
+                      <span class="font-mono font-bold text-brand-800">${s.cgpa}</span>
+                    </div>
+                  `).join('')
+                }
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Load Allocations Table
+    async function loadAllocations() {
+      try {
+        const res = await fetch('/api/allocations');
+        allAllocations = await res.json();
+        applyAllocFilters();
+      } catch (e) {
+        console.error("Error loading allocations", e);
+      }
+    }
+
+    function onAllocSearchChange() {
+      allocCurrentPage = 1;
+      applyAllocFilters();
+    }
+
+    function applyAllocFilters() {
+      const courseFilter = document.getElementById('filter-course').value;
+      const statusFilter = document.getElementById('filter-status').value;
+      const search = document.getElementById('alloc-search').value.toLowerCase().trim();
+
+      filteredAllocations = allAllocations.filter(a => {
+        const matchC = courseFilter === 'ALL' || a.course_code === courseFilter;
+        const matchS = statusFilter === 'ALL' || a.status === statusFilter;
+        const matchSearch = !search ||
+          a.student_name.toLowerCase().includes(search) ||
+          a.course_code.toLowerCase().includes(search) ||
+          a.course_name.toLowerCase().includes(search);
+        return matchC && matchS && matchSearch;
+      });
+
+      document.getElementById('allocations-showing-count').innerText = filteredAllocations.length;
+      document.getElementById('allocations-total-count').innerText = allAllocations.length;
+
+      renderAllocationsPage();
+    }
+
+    function renderAllocationsPage() {
+      const totalPages = Math.ceil(filteredAllocations.length / allocPageSize) || 1;
+      if (allocCurrentPage > totalPages) allocCurrentPage = totalPages;
+
+      const start = (allocCurrentPage - 1) * allocPageSize;
+      const pageData = filteredAllocations.slice(start, start + allocPageSize);
+
+      const tbody = document.getElementById('allocations-table-body');
+      if (pageData.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="py-6 text-center text-slate-400 italic">No allocations matching filters</td></tr>`;
+      } else {
+        tbody.innerHTML = pageData.map(a => {
+          let badge = 'badge-allotted';
+          if (a.status === 'WAITLISTED') badge = 'badge-waitlisted';
+          if (a.status === 'REJECTED') badge = 'badge-rejected';
+
+          return `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="py-2.5 px-4 font-mono text-[11px] text-slate-400">#${a.allocation_id}</td>
+              <td class="py-2.5 px-4">
+                <span class="font-bold text-slate-900">${a.course_code}</span>
+                <span class="text-[11px] text-slate-400 block">${a.course_name}</span>
+              </td>
+              <td class="py-2.5 px-4 font-semibold text-slate-800">${a.student_name}</td>
+              <td class="py-2.5 px-4 font-mono font-bold text-slate-900">${a.cgpa}</td>
+              <td class="py-2.5 px-4 text-slate-500 font-medium">Choice #${a.student_choice_rank}</td>
+              <td class="py-2.5 px-4">
+                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${badge}">${a.status}</span>
+              </td>
+              <td class="py-2.5 px-4 text-slate-400 text-[11px] font-mono">${a.allocated_at}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      document.getElementById('alloc-page-info').innerText = `Page ${allocCurrentPage} of ${totalPages} (${filteredAllocations.length} total rows)`;
+      const btns = document.getElementById('alloc-pagination-btns');
+      btns.innerHTML = `
+        <button onclick="changeAllocPage(${allocCurrentPage - 1})" ${allocCurrentPage === 1 ? 'disabled class="px-2 py-1 text-slate-300"' : 'class="px-2 py-1 text-slate-600 hover:text-slate-900 font-bold"'}><i class="ph ph-caret-left"></i></button>
+        <span class="px-2 py-1 font-semibold text-brand-700">${allocCurrentPage} / ${totalPages}</span>
+        <button onclick="changeAllocPage(${allocCurrentPage + 1})" ${allocCurrentPage >= totalPages ? 'disabled class="px-2 py-1 text-slate-300"' : 'class="px-2 py-1 text-slate-600 hover:text-slate-900 font-bold"'}><i class="ph ph-caret-right"></i></button>
+      `;
+    }
+
+    function changeAllocPage(page) {
+      const totalPages = Math.ceil(filteredAllocations.length / allocPageSize) || 1;
+      if (page >= 1 && page <= totalPages) {
+        allocCurrentPage = page;
+        renderAllocationsPage();
+      }
+    }
+
+    // Load Students Roster
+    async function loadStudentsList() {
+      try {
+        const res = await fetch('/api/students');
+        allStudents = await res.json();
+        document.getElementById('nav-students-count').innerText = allStudents.length;
+        renderStudentsRoster();
+        if (allStudents.length > 0) {
+          selectStudent(allStudents[0].student_id);
+        }
+      } catch (e) {
+        console.error("Failed to load students", e);
+      }
+    }
+
+    function onStudentSearchChange() {
+      renderStudentsRoster();
+    }
+
+    function renderStudentsRoster() {
+      const search = document.getElementById('stu-search').value.toLowerCase().trim();
+      const dept = document.getElementById('stu-filter-dept').value;
+      const status = document.getElementById('stu-filter-status').value;
+
+      const filtered = allStudents.filter(s => {
+        const matchSearch = !search ||
+          s.name.toLowerCase().includes(search) ||
+          s.email.toLowerCase().includes(search) ||
+          String(s.student_id) === search;
+        const matchDept = (dept === 'ALL') || (s.department === dept);
+        const matchStatus = (status === 'ALL') ||
+          (status === 'ALLOTTED' && s.allotted_status === 'ALLOTTED') ||
+          (status === 'UNALLOTTED' && s.allotted_status !== 'ALLOTTED');
+        return matchSearch && matchDept && matchStatus;
+      });
+
+      document.getElementById('students-filtered-count').innerText = filtered.length;
+      const container = document.getElementById('stu-list-container');
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 italic py-4 text-center">No students found matching search</p>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(s => {
+        const isSelected = s.student_id == selectedStudentId;
+        const isAllotted = s.allotted_status === 'ALLOTTED';
+        const badge = isAllotted
+          ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">${s.allotted_course}</span>`
+          : `<span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-500">Unallotted</span>`;
+
+        return `
+          <div onclick="selectStudent(${s.student_id})" class="p-2.5 rounded-lg cursor-pointer transition flex items-center justify-between ${isSelected ? 'bg-brand-50 border border-brand-200 shadow-sm' : 'hover:bg-slate-50 border border-transparent'}">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-8 h-8 rounded-full ${isSelected ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-700'} flex items-center justify-center font-bold text-xs">
+                ${s.name.split(' ').map(n=>n[0]).join('')}
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-slate-900">${s.name}</h4>
+                <p class="text-[10px] text-slate-400">${s.department} • CGPA <strong>${s.cgpa}</strong></p>
+              </div>
+            </div>
+            <div>${badge}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function selectStudent(studentId) {
+      selectedStudentId = studentId;
+      renderStudentsRoster();
+
+      try {
+        const res = await fetch(`/api/student/${studentId}`);
+        const data = await res.json();
+        const p = data.profile;
+
+        document.getElementById('stu-avatar').innerText = p.name.split(' ').map(n=>n[0]).join('');
+        document.getElementById('stu-name').innerText = p.name;
+        document.getElementById('stu-email').innerText = p.email;
+        document.getElementById('stu-sem-dept').innerText = `Sem ${p.semester} • ${p.department}`;
+        document.getElementById('stu-cgpa-badge').innerText = `CGPA ${p.cgpa}`;
+
+        const tagContainer = document.getElementById('stu-tag-badges');
+        tagContainer.innerHTML = data.tag_preferences.map(t => `
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-50 text-brand-800 border border-brand-200">#${t.preference_rank} ${t.tag_name}</span>
+        `).join('');
+
+        const isAllotted = data.course_preferences.some(c => c.allocation_status === 'ALLOTTED');
+        const allottedCourse = data.course_preferences.find(c => c.allocation_status === 'ALLOTTED');
+        const statusBadge = document.getElementById('stu-status-badge');
+
+        if (isAllotted && allottedCourse) {
+          statusBadge.innerText = 'ALLOTTED';
+          statusBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold badge-allotted';
+          document.getElementById('stu-allotted-course-text').innerText = `Allotted: ${allottedCourse.course_code} (${allottedCourse.course_name})`;
+        } else {
+          statusBadge.innerText = 'UNALLOTTED';
+          statusBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold badge-unallotted';
+          document.getElementById('stu-allotted-course-text').innerText = 'No seat allotted in current cycle';
+        }
+
+        const sBody = document.getElementById('shortlist-table-body');
+        document.getElementById('shortlist-count-badge').innerText = `${data.shortlist.length} Eligible Courses`;
+        
+        if (data.shortlist.length === 0) {
+          sBody.innerHTML = `<tr><td colspan="4" class="py-4 text-center text-slate-400 italic">No courses match tag preferences and CGPA cutoff</td></tr>`;
+        } else {
+          sBody.innerHTML = data.shortlist.map(s => `
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-3 font-bold text-slate-900">${s.course_code}</td>
+              <td class="py-2.5 px-3 text-slate-700">${s.course_name}</td>
+              <td class="py-2.5 px-3">
+                <span class="px-2 py-0.5 rounded font-bold text-[11px] bg-teal-100 text-teal-800">Tag Priority #${s.tag_preference_rank}</span>
+              </td>
+              <td class="py-2.5 px-3 text-emerald-700 font-semibold text-[11px]">
+                <i class="ph-bold ph-check text-xs"></i> Meets Cutoff
+              </td>
+            </tr>
+          `).join('');
+        }
+
+        const cpBody = document.getElementById('stu-course-prefs-body');
+        cpBody.innerHTML = data.course_preferences.map(cp => {
+          let badge = 'badge-allotted';
+          if (cp.allocation_status === 'WAITLISTED') badge = 'badge-waitlisted';
+          if (cp.allocation_status === 'REJECTED') badge = 'badge-rejected';
+
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-3 font-bold text-indigo-700">Choice #${cp.preference_rank}</td>
+              <td class="py-2.5 px-3">
+                <span class="font-bold text-slate-900">${cp.course_code}</span>
+                <span class="text-slate-400 text-[11px] block">${cp.course_name}</span>
+              </td>
+              <td class="py-2.5 px-3 font-mono text-slate-600">${cp.min_cgpa_required}</td>
+              <td class="py-2.5 px-3 text-slate-400 text-[11px] font-mono">${cp.submitted_at}</td>
+              <td class="py-2.5 px-3">
+                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${badge}">${cp.allocation_status || 'PENDING'}</span>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (e) {
+        console.error("Error loading student inspector", e);
+      }
+    }
+
+    // Run Full Cycle Trigger
+    async function runAllocationCycle() {
+      const btn = document.getElementById('btn-run-cycle');
+      btn.disabled = true;
+      btn.innerHTML = `<i class="ph ph-spinner animate-spin"></i><span>Allocating...</span>`;
+
+      try {
+        const res = await fetch('/api/run-cycle', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast("Allocation cycle executed successfully! Results updated.", "success");
+          await refreshAllData();
+          selectStudent(selectedStudentId);
+        } else {
+          showToast(`Error: ${data.error}`, "error");
+        }
+      } catch (e) {
+        showToast("Server request failed", "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="ph-bold ph-play"></i><span>Run Allocation</span>`;
+      }
+    }
+
+    // Boundary Test: Anika CGPA
+    async function setAnikaCGPA(cgpa) {
+      try {
+        const res = await fetch('/api/update-cgpa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ student_id: 8, cgpa: cgpa })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('anika-cur-cgpa').innerText = cgpa.toFixed(2);
+          document.getElementById('anika-shortlist-count').innerText = data.shortlist_count;
+          showToast(data.message, "success");
+          await fetch('/api/run-cycle', { method: 'POST' });
+          await refreshAllData();
+        }
+      } catch (e) {
+        showToast("Failed to update CGPA", "error");
+      }
+    }
+
+    // Trigger Test Modal
+    async function testTriggerModal() {
+      try {
+        const res = await fetch('/api/test-trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ course_id: 2 })
+        });
+        const data = await res.json();
+        
+        if (data.success && data.triggered) {
+          document.getElementById('modal-err-text').innerText = data.raw_mysql_error;
+          document.getElementById('modal-course-name').innerText = `${data.course_code} ${data.course_name} (Cap: ${data.max_allocations})`;
+          document.getElementById('trigger-result-box').innerHTML = `
+            <div class="text-emerald-700 font-semibold flex items-center space-x-1.5">
+              <i class="ph-bold ph-check-circle text-base"></i>
+              <span>Trigger successfully blocked over-allocation! (SQLSTATE 45000)</span>
+            </div>
+          `;
+          document.getElementById('modal-trigger').classList.remove('hidden');
+        } else {
+          showToast("Trigger test did not fire as expected", "error");
+        }
+      } catch (e) {
+        showToast("Trigger execution error", "error");
+      }
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    // Reset Current Database
+    async function resetCurrentDatabase() {
+      const curDataset = document.getElementById('select-dataset').value;
+      if (!confirm(`Reset database with ${curDataset}?`)) return;
+      try {
+        showToast("Resetting database...", "info");
+        const res = await fetch('/api/reset-database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataset: curDataset })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message, "success");
+          await refreshAllData();
+        } else {
+          showToast(`Reset failed: ${data.error}`, "error");
+        }
+      } catch (e) {
+        showToast("Reset request error", "error");
+      }
+    }
+
+    // Tab Switching
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-tab').forEach(el => {
+        el.classList.remove('active', 'bg-brand-50', 'text-brand-700', 'font-semibold');
+        el.classList.add('text-slate-600');
+      });
+
+      document.getElementById(tabId).classList.remove('hidden');
+      const activeNav = document.getElementById(`nav-${tabId}`);
+      if (activeNav) {
+        activeNav.classList.add('active', 'bg-brand-50', 'text-brand-700', 'font-semibold');
+        activeNav.classList.remove('text-slate-600');
+      }
+    }
+
+    // Toast Helper
+    function showToast(msg, type = "info") {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.className = `fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-lg border text-xs font-semibold flex items-center space-x-2 transition-all duration-300 ${
+        type === 'success' ? 'bg-emerald-600 text-white border-emerald-500' :
+        type === 'error' ? 'bg-rose-600 text-white border-rose-500' :
+        'bg-slate-900 text-white border-slate-800'
+      }`;
+      toast.style.transform = "translateY(0)";
+      toast.style.opacity = "1";
+      setTimeout(() => {
+        toast.style.transform = "translateY(20px)";
+        toast.style.opacity = "0";
+      }, 3500);
+    }
+  </script>
+</body>
+</html>
