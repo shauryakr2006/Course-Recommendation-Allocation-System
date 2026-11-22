@@ -17,9 +17,6 @@ INSERT INTO course_tags (tag_id, tag_name) VALUES
 (3, 'Project-Based'),
 (4, 'Theory-Heavy'),
 (5, 'AI-ML'),
-(6, 'Systems'),
-(7, 'Cybersecurity'),
-(8, 'Data-Science'),
 (9, 'Web-Dev'),
 (10, 'Research-Oriented');
 
@@ -43,14 +40,12 @@ INSERT INTO course_tag_map (course_id, tag_id) VALUES
 (2, 5),
 (3, 1),
 (3, 3),
-(3, 6),
 (4, 1),
 (4, 2),
 (5, 1),
 (5, 5),
 (5, 10),
-(6, 6),
-(6, 7),
+(6, 1),
 (6, 3),
 (7, 1),
 (7, 9),
@@ -88,7 +83,7 @@ INSERT INTO student_tag_preferences (student_id, tag_id, preference_rank) VALUES
 (8, 2, 1),
 (8, 3, 2),
 (9, 5, 1),
-(9, 6, 2),
+(9, 3, 2),
 (10, 1, 1),
 (10, 2, 2);
 

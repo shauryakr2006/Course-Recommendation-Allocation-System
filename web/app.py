@@ -11,6 +11,7 @@ DB_USER = "root"
 DB_PASS = "yummy"
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+SQL_DIR = os.path.join(PROJECT_ROOT, "sql")
 
 def execute_mysql_query(sql, database=DB_NAME):
     """Executes a query using mysql CLI with tab-delimited output and returns list of dicts."""
@@ -166,7 +167,7 @@ def get_students():
 
         where_clauses = []
         if search:
-            where_clauses.append(f"(s.name LIKE '%{search}%' OR s.email LIKE '%{search}%' OR s.student_id = '{search}')")
+            where_clauses.append(f"(s.name LIKE '%{search}%' OR s.student_id = '{search}')")
         if dept_filter and dept_filter != "ALL":
             where_clauses.append(f"s.department = '{dept_filter}'")
 
@@ -255,12 +256,24 @@ def get_student_details(student_id):
             ORDER BY c.course_id ASC;
         """)
 
+        allotted_course_res = execute_mysql_query(f"""
+            SELECT c.course_code 
+            FROM allocations a 
+            JOIN courses c ON a.course_id = c.course_id 
+            WHERE a.student_id = {student_id} AND a.status = 'ALLOTTED' 
+            LIMIT 1;
+        """)
+        allotted_code = allotted_course_res[0]["course_code"] if allotted_course_res else "UNALLOTTED"
+        allocation_reason = compute_allocation_explanation(student_id, allotted_code)
+
         return jsonify({
             "profile": profile,
             "tag_preferences": tag_prefs,
             "shortlist": shortlist,
             "course_preferences": course_prefs,
-            "all_courses": all_courses
+            "all_courses": all_courses,
+            "allotted_course": allotted_code,
+            "allocation_reason": allocation_reason
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -375,6 +388,49 @@ def run_cycle():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+def compute_allocation_explanation(student_id, allotted_course_code):
+    """Explains which final parameter or rule secured or determined the student's allocation."""
+    if not allotted_course_code or allotted_course_code == 'UNALLOTTED':
+        return 'Not allotted to any course.'
+    try:
+        pref = execute_mysql_query(f"""
+            SELECT scp.preference_rank, scp.submitted_at, s.cgpa, c.course_id 
+            FROM student_course_preferences scp 
+            JOIN students s ON scp.student_id = s.student_id 
+            JOIN courses c ON scp.course_id = c.course_id 
+            WHERE scp.student_id = {student_id} AND c.course_code = '{allotted_course_code}';
+        """)
+        if not pref:
+            return f"Fallback Allocation: Assigned to {allotted_course_code} as best available elective based on CGPA merit after stated choices filled."
+        
+        p = pref[0]
+        rank = p['preference_rank']
+        cid = p['course_id']
+        cgpa = float(p['cgpa'])
+        sub_at = str(p['submitted_at'])
+        
+        ties = execute_mysql_query(f"""
+            SELECT s.student_id, scp.preference_rank, scp.submitted_at 
+            FROM student_course_preferences scp 
+            JOIN students s ON scp.student_id = s.student_id 
+            WHERE scp.course_id = {cid} AND s.cgpa = {cgpa} AND s.student_id != {student_id};
+        """)
+        if not ties:
+            return f"Academic Merit: Choice #{rank} secured via higher CGPA ({cgpa:.2f})."
+        
+        tie = ties[0]
+        t_rank = int(tie['preference_rank'])
+        if int(rank) < t_rank:
+            return f"Preference Priority: Choice #{rank} prioritized over competing Choice #{t_rank} at tied CGPA ({cgpa:.2f})."
+        elif int(rank) == t_rank:
+            if sub_at < str(tie['submitted_at']):
+                return f"Timestamp Audit: Choice #{rank} at CGPA {cgpa:.2f} won by earlier submission ({sub_at})."
+            else:
+                return f"Deterministic Key: Final tie-break resolved on Student ID ({student_id})."
+        return f"Allocated to Choice #{rank} (CGPA {cgpa:.2f})."
+    except Exception:
+        return f"Allocated to {allotted_course_code}."
+
 # ==============================================================================
 # DEMO & EXPERIMENTATION APIS
 # ==============================================================================
@@ -399,6 +455,7 @@ def get_demo_students():
 
         for s in students:
             sid = s["student_id"]
+            s["allocation_reason"] = compute_allocation_explanation(sid, s["allotted_course"])
             # tags
             tags = execute_mysql_query(f"""
                 SELECT ct.tag_id, ct.tag_name, stp.preference_rank 
@@ -431,14 +488,17 @@ def add_demo_student():
         data = request.json or {}
         name = data.get("name", "").strip()
         email = data.get("email", "").strip().lower()
+        if not email:
+            import time
+            email = f"student_{int(time.time()*1000)}@sjce.edu"
         semester = data.get("semester", "V").strip()
         department = data.get("department", "CSE").strip()
         cgpa = float(data.get("cgpa", 7.50))
         tag_ids = data.get("tag_ids", [])
         course_ids = data.get("course_ids", [])
 
-        if not name or not email:
-            return jsonify({"success": False, "error": "Name and email are required"}), 400
+        if not name:
+            return jsonify({"success": False, "error": "Name is required"}), 400
         if cgpa < 0.0 or cgpa > 10.0:
             return jsonify({"success": False, "error": "CGPA must be between 0.00 and 10.00"}), 400
 
@@ -504,7 +564,7 @@ def update_demo_student():
         # Update student record
         execute_mysql_command(f"""
             UPDATE students 
-            SET name = '{name}', email = '{email}', cgpa = {cgpa:.2f}, department = '{department}'
+            SET name = '{name}', cgpa = {cgpa:.2f}, department = '{department}'
             WHERE student_id = {student_id};
         """)
 
@@ -556,7 +616,7 @@ def delete_demo_student():
 def reset_10_students():
     """Resets the database to the 10 demo students benchmark."""
     try:
-        data_path = os.path.join(PROJECT_ROOT, "dataset_10_students.sql")
+        data_path = os.path.join(SQL_DIR, "dataset_10_students.sql")
         execute_sql_file(data_path)
         return jsonify({
             "success": True,
@@ -626,16 +686,13 @@ def reset_database():
     try:
         data = request.json or {}
         dataset_type = data.get("dataset", "10_students")
-        schema_path = os.path.join(PROJECT_ROOT, "schema.sql")
+        schema_path = os.path.join(SQL_DIR, "schema.sql")
 
-        if dataset_type == "benchmark":
-            data_path = os.path.join(PROJECT_ROOT, "sample_data.sql")
-            msg = "Database reset to original Benchmark Lab Dataset (8 students, 4 courses)!"
-        elif dataset_type == "100_students":
-            data_path = os.path.join(PROJECT_ROOT, "dataset_100_students.sql")
-            msg = "Database reset to Full Scale Dataset (100 students, 14 courses, 10 tags)!"
+        if dataset_type == "100_students":
+            data_path = os.path.join(SQL_DIR, "dataset_100_students.sql")
+            msg = "Database reset to Full Scale Dataset (100 students, 14 courses)!"
         else:
-            data_path = os.path.join(PROJECT_ROOT, "dataset_10_students.sql")
+            data_path = os.path.join(SQL_DIR, "dataset_10_students.sql")
             msg = "Database reset to the 10 Demo Students dataset!"
 
         execute_sql_file(schema_path)

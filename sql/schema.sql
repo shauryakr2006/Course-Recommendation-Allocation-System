@@ -191,6 +191,52 @@ BEGIN
 END //
 DELIMITER ;
 
+-- Procedure to allocate unallotted students to the best available eligible course based on CGPA
+DELIMITER //
+CREATE PROCEDURE allocate_unallotted_fallback()
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE v_sid INT;
+    DECLARE v_cgpa DECIMAL(4,2);
+    DECLARE v_best_cid INT;
+    
+    DECLARE cur_unallotted CURSOR FOR
+        SELECT s.student_id, s.cgpa
+        FROM students s
+        WHERE s.student_id NOT IN (
+            SELECT a.student_id FROM allocations a WHERE a.status = 'ALLOTTED'
+        )
+        ORDER BY s.cgpa DESC, s.student_id ASC;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    OPEN cur_unallotted;
+    unallotted_loop: LOOP
+        FETCH cur_unallotted INTO v_sid, v_cgpa;
+        IF done THEN
+            LEAVE unallotted_loop;
+        END IF;
+
+        SET v_best_cid = NULL;
+
+        SELECT c.course_id INTO v_best_cid
+        FROM courses c
+        WHERE c.current_allocations < c.max_allocations
+          AND v_cgpa >= c.min_cgpa_required
+          AND c.course_id NOT IN (
+              SELECT a.course_id FROM allocations a WHERE a.student_id = v_sid
+          )
+        ORDER BY c.min_cgpa_required DESC, c.credits DESC, c.course_id ASC
+        LIMIT 1;
+
+        IF v_best_cid IS NOT NULL THEN
+            INSERT INTO allocations (student_id, course_id, status)
+            VALUES (v_sid, v_best_cid, 'ALLOTTED');
+        END IF;
+    END LOOP;
+    CLOSE cur_unallotted;
+END //
+DELIMITER ;
+
 -- Procedure to execute an idempotent full allocation cycle across all courses
 DELIMITER //
 CREATE PROCEDURE run_full_allocation_cycle()
@@ -213,5 +259,8 @@ BEGIN
         CALL allocate_courses(v_cid);
     END LOOP;
     CLOSE cur_courses;
+
+    -- Allocate remaining unallotted students to best available course by CGPA
+    CALL allocate_unallotted_fallback();
 END //
 DELIMITER ;
